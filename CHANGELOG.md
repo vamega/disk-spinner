@@ -2,7 +2,7 @@
 
 <!-- next-header -->
 
-## [Unreleased] - ReleaseDate
+## [[0.3.0](https://docs.rs/disk-spinner/0.3.0/disk-spinner/)] - 2026-03-03
 
 ## Added
 
