@@ -67,6 +67,13 @@ pub(crate) struct Args {
     #[clap(long)]
     seed: Option<u64>,
 
+    /// Skip the write stage and only run the read-back verification.
+    ///
+    /// Requires --seed so the generator can reproduce the data that was
+    /// previously written to the device.
+    #[clap(long, requires = "seed")]
+    skip_write: bool,
+
     /// Test the device even if the media type is not a spinning disk.
     #[clap(long)]
     allow_any_media: bool,
@@ -99,9 +106,17 @@ fn main() -> anyhow::Result<()> {
         sanity_checks(&args, partition, &path, &device)?;
 
         info!(?seed, ?partition, ?device, ?path, "Starting test");
-        let write_generator = args.generator.to_generator(buffer_size, seed);
-        let written = write_test::write(&path, write_generator, buffer_size).context("During write test")?;
-        info!(device=?path, %written, "write test succeeded");
+        let written = if args.skip_write {
+            let capacity = determine_size(&path)?;
+            let written = (capacity / buffer_size as u64 * buffer_size as u64) as usize;
+            info!(device=?path, %written, "skipping write test; verifying against existing on-disk data");
+            written
+        } else {
+            let write_generator = args.generator.to_generator(buffer_size, seed);
+            let written = write_test::write(&path, write_generator, buffer_size).context("During write test")?;
+            info!(device=?path, %written, "write test succeeded");
+            written
+        };
         let read_generator = args.generator.to_generator(buffer_size, seed);
         match read_test::read_back(&path, read_generator, buffer_size, written).context("During read test")? {
             Ok(_) => {
