@@ -126,8 +126,7 @@
         "fenix": "fenix",
         "flake-compat": "flake-compat",
         "flake-parts": "flake-parts",
-        "nixpkgs": "nixpkgs_2",
-        "shishua": "shishua"
+        "nixpkgs": "nixpkgs_2"
       }
     },
     "rust-analyzer-src": {
@@ -144,22 +143,6 @@
         "owner": "rust-lang",
         "ref": "nightly",
         "repo": "rust-analyzer",
-        "type": "github"
-      }
-    },
-    "shishua": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1691264317,
-        "narHash": "sha256-T5CBDnksRjuLlDfN6yzbNVTkOA5U+pqhgZXHzT0EzYg=",
-        "owner": "espadrine",
-        "repo": "shishua",
-        "rev": "28ab108f9532bf35b2f988357c9a06434fd36291",
-        "type": "github"
-      },
-      "original": {
-        "owner": "espadrine",
-        "repo": "shishua",
         "type": "github"
       }
     }

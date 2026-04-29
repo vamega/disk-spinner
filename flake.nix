@@ -52,9 +52,8 @@
           rustPlatform.buildRustPackage {
             pname = "disk-spinner";
             version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
-            nativeBuildInputs = nativeBuildInputs ++ [pkgs.makeBinaryWrapper];
+            inherit nativeBuildInputs;
             buildInputs = nativeBuildInputs;
-            buildFeatures = ["shishua-cli"];
             src = let
               fs = pkgs.lib.fileset;
             in
@@ -67,37 +66,15 @@
                 ];
               };
 
-            postInstall = ''
-              wrapProgram $out/bin/disk-spinner \
-                  --prefix PATH : ${pkgs.lib.makeBinPath [config.packages.shishua]} \
-                  --prefix LD_LIBRARY_PATH : ${pkgs.lib.escapeShellArg (pkgs.lib.makeLibraryPath cLibs)}
-            '';
             doCheck = false; # The sandbox blocks io_uring, which makes testing this program impossible.
-            cargoLock.lockFile = ./Cargo.lock;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              outputHashes = {
+                "shishua-0.2.0" = "sha256-jP8+tWuXxISk4MFco8a0HWTQz6dC9UvVnufqR15EIYw=";
+              };
+            };
             meta.mainProgram = "disk-spinner";
           };
-
-        packages.shishua = pkgs.stdenv.mkDerivation (
-          let
-            shishua =
-              # Requires AVX2 or neon intrinsics to be fast, so let's mandate them:
-              if (pkgs.lib.hasPrefix "x86_64-" system)
-              then "shishua-avx2"
-              else if (pkgs.lib.hasPrefix "aarch64-" system)
-              then "shishua-neon"
-              else "shishua";
-          in {
-            pname = "shishua";
-            version = "0.0.0";
-            src = inputs.shishua;
-            makeFlags = shishua;
-            installPhase = ''
-              mkdir -p $out/bin
-              mv ${shishua} $out/bin/shishua
-            '';
-            meta.mainProgram = "shishua";
-          }
-        );
 
         apps = {
           default = config.apps.disk-spinner;
@@ -143,10 +120,6 @@
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
-    };
-    shishua = {
-      url = "github:espadrine/shishua";
-      flake = false;
     };
   };
 }
