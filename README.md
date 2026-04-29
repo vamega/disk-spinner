@@ -22,11 +22,7 @@ The Linux platform is privileged a bit in terms of not only my own platform usag
 
 ## Performance
 
-disk-spinner comes with some predictable-garbage generators pre-installed: AES and BLAKE3. On modern CPUs, AES is the more performant of the two (provided your CPU has AES-NI or NEON instructions, which many amd64 and aarch64 CPUs targeted by rust do these days). The AES generator manages about 200-500MB/s of data using one CPU thread, which tends to be enough for testing a few disks at a time. Older CPUs (those lacking the intrinsic instructions that make AES fast) can benefit from the BLAKE3 generator - select it with the `--generator=blake3` CLI flag.
-
-However, if you wish to test many disks (say, 75% the number of your available CPU cores), you will quickly find that even very many CPU cores can't saturate all the disks' IO bandwidth, and the process will be very slow. That is where the `--generator=shishua` RNG comes in: It's a very fast (approximately 5GiB/s fast) and so can satisfy many more disks.
-
-The catch with the `shishua` generator is that this requires that [the `shishua` CLI tool](https://github.com/espadrine/shishua) is available in `$PATH` and I don't think there are OS distro packages available. When you have made that tool available on $PATH, build disk-spinner with `--features shishua-cli` (and don't forget `--release`!) and it should be used as the default generator. The disk-spinner nix package automatically does everything you need to get the shishua-based generator by default.
+disk-spinner comes with several predictable-garbage generators. Shishua is the default generator and is the fastest option for most systems. AES and BLAKE3 are also available with `--generator=aes` and `--generator=blake3`. Both AES and BLAKE3 are cryptographcailly secure garbage generators, unlike Shishua. This shouldn't matter for the purposes we're using this for. On modern CPUs, AES is usually the faster of those two, provided your CPU has AES-NI or NEON instructions. Older CPUs that lack fast AES instructions may benefit from the BLAKE3 generator instead.
 
 ## The name
 

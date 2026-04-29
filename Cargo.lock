@@ -360,6 +360,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "rayon",
+ "shishua",
  "test-case",
  "tracing",
  "tracing-indicatif",
@@ -851,6 +852,14 @@ name = "shellscript"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15c0d07fa97f8d209609a1a1549bd886bd907f520f75e1c785783167a66d20c4"
+
+[[package]]
+name = "shishua"
+version = "0.2.0"
+source = "git+https://github.com/vamega/shishua_rs#768e33ee145d0f46ac68818f169cc82f1aba62ef"
+dependencies = [
+ "rand_core",
+]
 
 [[package]]
 name = "shlex"

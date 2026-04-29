@@ -6,17 +6,15 @@ use std::{fmt, io::Read, str::FromStr};
 /// The method to use for generating deterministic "garbage" data
 #[derive(Debug, Clone, Copy, Default)]
 pub enum GarbageGeneratorVariant {
-    #[cfg_attr(not(feature = "shishua-cli"), default)]
     /// AES, CTR mode with 128-bit little-endian counter.
     Aes,
 
     /// The BLAKE3 cryptographic hash function; slightly faster than AES on Apple Silicon hardware.
     Blake3,
 
-    #[cfg_attr(feature = "shishua-cli", default)]
-    #[cfg(feature = "shishua-cli")]
-    /// The `shishua` RNG, invoked via the cli tool of the same name.
-    ShishuaCli,
+    #[default]
+    /// The `shishua` RNG, generated in-process.
+    Shishua,
 }
 
 impl fmt::Display for GarbageGeneratorVariant {
@@ -24,8 +22,7 @@ impl fmt::Display for GarbageGeneratorVariant {
         match self {
             GarbageGeneratorVariant::Aes => write!(f, "AES"),
             GarbageGeneratorVariant::Blake3 => write!(f, "BLAKE3"),
-            #[cfg(feature = "shishua-cli")]
-            GarbageGeneratorVariant::ShishuaCli => write!(f, "shishua"),
+            GarbageGeneratorVariant::Shishua => write!(f, "shishua"),
         }
     }
 }
@@ -37,9 +34,7 @@ impl FromStr for GarbageGeneratorVariant {
         match s.to_lowercase().as_str() {
             "aes" => Ok(GarbageGeneratorVariant::Aes),
             "blake3" => Ok(GarbageGeneratorVariant::Blake3),
-
-            #[cfg(feature = "shishua-cli")]
-            "shishua" => Ok(GarbageGeneratorVariant::ShishuaCli),
+            "shishua" => Ok(GarbageGeneratorVariant::Shishua),
 
             _ => Err(anyhow::anyhow!("Unknown garbage generator variant {s}")),
         }
@@ -54,10 +49,7 @@ impl GarbageGeneratorVariant {
             GarbageGeneratorVariant::Blake3 => {
                 Box::new(blake3::Blake3Generator::new(block_size, seed))
             }
-            #[cfg(feature = "shishua-cli")]
-            GarbageGeneratorVariant::ShishuaCli => Box::new(
-                shishua::ShishuaCliGenerator::new(seed).expect("shishua child process should work"),
-            ),
+            GarbageGeneratorVariant::Shishua => Box::new(shishua::ShishuaGenerator::new(seed)),
         }
     }
 }

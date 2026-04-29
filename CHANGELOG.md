@@ -2,13 +2,19 @@
 
 <!-- next-header -->
 
+## Unreleased
+
+### Changed
+
+- The Shishua generator now runs in-process using the Rust implementation, so the external `shishua` CLI no longer needs to be installed or on `$PATH`.
+
 ## [[0.3.0](https://docs.rs/disk-spinner/0.3.0/disk-spinner/)] - 2026-03-03
 
 ## Added
 
 - Now comes with a Dockerfile.
 - Customizable pseudorandom functions can be used: 
-  - Shishua (requires the shishua CLI tool installed)
+  - Shishua
   - Blake3 (new)
   - AES (existing)
 
