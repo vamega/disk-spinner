@@ -8,6 +8,10 @@ authors = ["Andreas Fuchs <asf@boinkor.net>"]
 version = "0.3.0"
 edition = "2021"
 
+[features]
+default = []
+udev = ["dep:block-utils"]
+
 [dependencies]
 aes = "0.8.4"
 aligned-buffer = "0.2.0"
@@ -27,7 +31,7 @@ tracing-indicatif = "0.3.14"
 tracing-subscriber = "0.3.19"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-block-utils = "0.11.1"
+block-utils = { version = "0.11.1", optional = true }
 
 [dev-dependencies]
 test-case = "3.3.1"

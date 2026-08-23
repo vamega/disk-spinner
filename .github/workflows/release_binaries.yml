@@ -1,0 +1,278 @@
+name: Release binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build assets for
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  linux:
+    name: Linux static ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64 static
+            target: x86_64-unknown-linux-musl
+            asset_suffix: linux-x86_64-static
+          - label: aarch64 static
+            target: aarch64-unknown-linux-musl
+            asset_suffix: linux-aarch64-static
+          - label: x86 static
+            target: i686-unknown-linux-musl
+            asset_suffix: linux-x86-static
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        run: cross build --release --locked --target "${{ matrix.target }}"
+
+      - name: Verify static binary
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/disk-spinner"
+          file "$bin" | tee file.out
+
+          if ! grep -Eq "statically linked|static-pie linked" file.out; then
+            echo "Linux release binary is dynamically linked; expected a static binary." >&2
+            exit 1
+          fi
+
+          if ldd "$bin" >ldd.out 2>&1; then
+            cat ldd.out
+            if grep -q "=>" ldd.out; then
+              echo "Linux release binary is dynamically linked; expected a static binary." >&2
+              exit 1
+            fi
+          else
+            cat ldd.out
+          fi
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/disk-spinner" "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+
+  linux-glibc:
+    name: Linux glibc/libudev ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            target: x86_64-unknown-linux-gnu
+            asset_suffix: linux-glibc-x86_64-libudev
+          - label: aarch64
+            target: aarch64-unknown-linux-gnu
+            asset_suffix: linux-glibc-aarch64-libudev
+          - label: x86
+            target: i686-unknown-linux-gnu
+            asset_suffix: linux-glibc-x86-libudev
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        run: cross build --release --locked --features udev --target "${{ matrix.target }}"
+        env:
+          PKG_CONFIG_ALLOW_CROSS: "1"
+
+      - name: Inspect dynamic dependencies
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/disk-spinner"
+          file "$bin"
+          readelf -d "$bin" | tee readelf.out
+          grep -q "Shared library: \[libudev.so" readelf.out
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/disk-spinner" "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+
+  linux-alpine:
+    name: Alpine/libudev ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            platform: linux/amd64
+            asset_suffix: linux-alpine-x86_64-libudev
+          - label: aarch64
+            platform: linux/arm64
+            asset_suffix: linux-alpine-aarch64-libudev
+          - label: x86
+            platform: linux/386
+            asset_suffix: linux-alpine-x86-libudev
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64,386
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e CARGO_HOME=/workspace/.cargo-alpine \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -e RUSTFLAGS="-C target-feature=-crt-static" \
+            alpine:3.22 \
+            sh -euxc '
+              apk add --no-cache binutils build-base cargo eudev-dev file git rust
+              git config --global --add safe.directory /workspace
+              cargo build --release --locked --features udev
+              file target/release/disk-spinner
+              readelf -d target/release/disk-spinner | tee readelf.out
+              grep -q "Shared library: \[libudev.so" readelf.out
+              chown -R "$HOST_UID:$HOST_GID" target .cargo-alpine readelf.out
+            '
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp target/release/disk-spinner "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+
+  macos:
+    name: macOS ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            asset_suffix: macos-x86_64
+          - label: Apple Silicon
+            os: macos-15
+            target: aarch64-apple-darwin
+            asset_suffix: macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Inspect binary
+        run: |
+          set -euo pipefail
+          bin="target/${{ matrix.target }}/release/disk-spinner"
+          file "$bin"
+          otool -L "$bin"
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/disk-spinner" "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          shasum -a 256 "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true

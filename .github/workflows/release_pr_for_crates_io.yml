@@ -21,10 +21,6 @@ jobs:
         uses: taiki-e/cache-cargo-install-action@v3
         with:
           tool: cargo-release
-      - uses: awalsh128/cache-apt-pkgs-action@v1.6.0
-        with:
-          packages: "libudev-dev"
-          version: 1.0
       - uses: cargo-bins/release-pr@v2
         id: pr
         with:

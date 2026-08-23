@@ -12,14 +12,11 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v6
-      - uses: boinkor-net/ci-baseline-nix/actions/setup@main
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/cachix-action@v17
         with:
-          tailnet_client_id: ${{ secrets.TAILSCALE_CI_CLIENT_ID }}
-          tailnet_client_secret: ${{ secrets.TAILSCALE_CI_CLIENT_SECRET }}
-          attic_cache: "boinkornet-github-ci"
-          attic_endpoint: ${{ secrets.ATTIC_ENDPOINT }}
-          attic_token: ${{ secrets.ATTIC_TOKEN }}
-          root: "."
+          name: disk-spinner
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - uses: boinkor-net/ci-baseline-nix/actions/flake_update@main
         with:
           root: "."
