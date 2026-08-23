@@ -229,6 +229,16 @@ jobs:
         with:
           platforms: 386
 
+      - name: Cache Alpine Cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cargo-alpine
+            target
+          key: alpine-${{ matrix.label }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src/**') }}
+          restore-keys: |
+            alpine-${{ matrix.label }}-
+
       - name: Build
         run: |
           set -euo pipefail
