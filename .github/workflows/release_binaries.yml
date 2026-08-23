@@ -99,12 +99,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: x86_64
-            target: x86_64-unknown-linux-gnu
-            asset_suffix: linux-glibc-x86_64-libudev
-          - label: aarch64
-            target: aarch64-unknown-linux-gnu
-            asset_suffix: linux-glibc-aarch64-libudev
           - label: x86
             target: i686-unknown-linux-gnu
             asset_suffix: linux-glibc-x86-libudev
@@ -154,6 +148,63 @@ jobs:
             dist/*.sha256
           fail_on_unmatched_files: true
 
+  linux-glibc-native:
+    name: Linux glibc/libudev native ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: x86_64
+            runner: ubuntu-latest
+            asset_suffix: linux-glibc-x86_64-libudev
+          - label: aarch64
+            runner: ubuntu-24.04-arm
+            asset_suffix: linux-glibc-aarch64-libudev
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libudev
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes libudev-dev pkg-config
+
+      - name: Build
+        run: cargo build --release --locked --features udev
+
+      - name: Inspect dynamic dependencies
+        run: |
+          set -euo pipefail
+          bin="target/release/disk-spinner"
+          file "$bin"
+          readelf -d "$bin" | tee readelf.out
+          grep -q "Shared library: \[libudev.so" readelf.out
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp target/release/disk-spinner "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+
   linux-alpine:
     name: Alpine/libudev ${{ matrix.label }}
     runs-on: ubuntu-latest
@@ -164,9 +215,6 @@ jobs:
           - label: x86_64
             platform: linux/amd64
             asset_suffix: linux-alpine-x86_64-libudev
-          - label: aarch64
-            platform: linux/arm64
-            asset_suffix: linux-alpine-aarch64-libudev
           - label: x86
             platform: linux/386
             asset_suffix: linux-alpine-x86-libudev
@@ -179,7 +227,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: arm64,386
+          platforms: 386
 
       - name: Build
         run: |
@@ -207,6 +255,56 @@ jobs:
           set -euo pipefail
           version="${RELEASE_TAG}"
           name="disk-spinner-${version}-${{ matrix.asset_suffix }}"
+          mkdir -p "dist/$name"
+          cp target/release/disk-spinner "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            dist/*.tar.gz
+            dist/*.sha256
+          fail_on_unmatched_files: true
+
+  linux-alpine-aarch64:
+    name: Alpine/libudev aarch64 native
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e CARGO_HOME=/workspace/.cargo-alpine \
+            -e HOST_UID="$(id -u)" \
+            -e HOST_GID="$(id -g)" \
+            -e RUSTFLAGS="-C target-feature=-crt-static" \
+            alpine:3.22 \
+            sh -euxc '
+              apk add --no-cache binutils build-base cargo eudev-dev file git rust
+              git config --global --add safe.directory /workspace
+              cargo build --release --locked --features udev
+              file target/release/disk-spinner
+              readelf -d target/release/disk-spinner | tee readelf.out
+              grep -q "Shared library: \[libudev.so" readelf.out
+              chown -R "$HOST_UID:$HOST_GID" target .cargo-alpine readelf.out
+            '
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG}"
+          name="disk-spinner-${version}-linux-alpine-aarch64-libudev"
           mkdir -p "dist/$name"
           cp target/release/disk-spinner "dist/$name/"
           cp LICENSE README.md "dist/$name/"
